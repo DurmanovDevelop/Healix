@@ -21,15 +21,14 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     user.last_login = datetime.utcnow()
     db.commit()
-
-    # ИСПРАВЛЕНИЕ: str(user.id) вместо user.id, так как JWT требует строку для 'sub'
     token = create_access_token(
         data={
-            "sub": str(user.id),
+            "sub": str(user.id), 
             "role": user.role.name,
             "email": user.email,
         }
     )
+    
     return Token(
         access_token=token,
         user_id=user.id,
@@ -40,17 +39,14 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/register", response_model=UserOut)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    # Проверка существования
     existing = db.query(User).filter(User.email == req.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email уже зарегистрирован")
 
-    # Получаем роль
     role = db.query(Role).filter(Role.name == req.role).first()
     if not role:
         raise HTTPException(status_code=400, detail=f"Роль '{req.role}' не найдена")
 
-    # Создаём пользователя
     user = User(
         email=req.email,
         password_hash=get_password_hash(req.password),
@@ -62,7 +58,6 @@ def register(req: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
 
-    # Если пациент — создаём запись в таблице patients
     if role.name == "patient" and req.birth_date:
         patient = Patient(
             user_id=user.id,

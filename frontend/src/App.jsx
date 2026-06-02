@@ -207,38 +207,54 @@ const Modal = ({ open, onClose, title, children, size = 'md' }) => {
 
 // ====================== ЭКРАН АВТОРИЗАЦИИ ======================
 const AuthScreen = ({ onLogin }) => {
-  const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('patient');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+    const [mode, setMode] = useState('login');
+    const [email, setEmail] = useState('');
+    const [pass, setPass] = useState('');
+    const [name, setName] = useState('');
+    const [role, setRole] = useState('patient');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [successMsg, setSuccessMsg] = useState('');
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    try {
-      let response;
-      if (mode === 'login') {
-        response = await API.login(email, pass);
-      } else {
-        await API.register({ email, password: pass, full_name: name, role, birth_date: '1990-01-01' });
-        response = await API.login(email, pass);
-      }
-      API.setToken(response.access_token);
-      API.setUser({
-        id: response.user_id, email, full_name: response.full_name, role: response.role,
-        avatar: response.full_name.split(' ').map(n => n[0]).join('').slice(0, 2),
-      });
-      onLogin();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const submit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccessMsg('');
+        setLoading(true);
+        try {
+        if (mode === 'login') {
+            // === ВХОД В СИСТЕМУ ===
+            const response = await API.login(email, pass);
+            API.setToken(response.access_token);
+            API.setUser({
+            id: response.user_id,
+            email,
+            full_name: response.full_name,
+            role: response.role,
+            avatar: response.full_name.split(' ').map(n => n[0]).join('').slice(0, 2),
+            });
+            onLogin();
+        } else {
+            // === РЕГИСТРАЦИЯ (без автоматического входа) ===
+            await API.register({
+            email, password: pass, full_name: name,
+            role, birth_date: '1990-01-01',
+            });
+            
+            // Показываем уведомление об успехе
+            setSuccessMsg('✅ Регистрация успешна! Теперь войдите в систему.');
+            // Переключаемся на вкладку "Вход"
+            setMode('login');
+            // Сбрасываем пароль, но оставляем email заполненным
+            setPass('');
+            setName('');
+        }
+        } catch (err) {
+        setError(err.message);
+        } finally {
+        setLoading(false);
+        }
+    };
 
   const quickLogin = async (e, p) => {
     try {
@@ -287,15 +303,25 @@ const AuthScreen = ({ onLogin }) => {
 
           <div className="flex bg-zinc-950/60 rounded-xl p-1 mb-8 border border-zinc-800">
             {['login', 'register'].map(m => (
-              <button key={m} onClick={() => setMode(m)}
+              <button key={m} onClick={() => { setMode(m); setSuccessMsg(''); setError(''); }}
                 className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all ${mode === m ? 'bg-red-600 text-white' : 'text-zinc-400'}`}>
                 {m === 'login' ? 'Вход' : 'Регистрация'}
               </button>
             ))}
           </div>
 
-          {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">{error}</div>}
+        {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-sm text-red-400">
+            {error}
+        </div>
+        )}
 
+        {successMsg && (
+        <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-sm text-emerald-400 flex items-center gap-2">
+            <CheckCircle2 size={16} />
+            {successMsg}
+        </div>
+        )}
           <form onSubmit={submit} className="space-y-4">
             {mode === 'register' && (
               <div>
@@ -586,23 +612,29 @@ const ChatPage = ({ user, indicators, onIndicatorsUpdate }) => {
   };
 
   const MarkdownLite = ({ text }) => {
+    if (!text) return null;
     const lines = text.split('\n');
-    return <div className="space-y-1">
-      {lines.map((line, i) => {
-        const parts = []; let key = 0;
-        const regex = /\*\*([^*]+)\*\*/g;
-        let lastIndex = 0, match;
-        while ((match = regex.exec(line)) !== null) {
-          if (match.index > lastIndex) parts.push(<span key={key++}>{line.slice(lastIndex, match.index)}</span>);
-          parts.push(<strong key={key++} className="font-bold text-white">{match[1]}</strong>);
-          lastIndex = regex.lastIndex;
-        }
-        if (lastIndex < line.length) parts.push(<span key={key++}>{line.slice(lastIndex)}</span>);
-        if (parts.length === 0) parts.push(<span key={key}>{line}</span>);
-        if (line.trim() === '') return <div key={i} className="h-2" />;
-        return <div key={i}>{parts}</div>;
-      })}
-    </div>;
+    return (
+      <div className="space-y-1">
+        {lines.map((line, i) => {
+          const parts = [];
+          let key = 0;
+          // 👇 ВОТ ЭТА СТРОКА ДОЛЖНА БЫТЬ ИМЕННО ТАКОЙ (со слешами):
+          const regex = /\*\*([^*]+)\*\*/g; 
+          let lastIndex = 0;
+          let match;
+          while ((match = regex.exec(line)) !== null) {
+            if (match.index > lastIndex) parts.push(<span key={key++}>{line.slice(lastIndex, match.index)}</span>);
+            parts.push(<strong key={key++} className="font-bold text-white">{match[1]}</strong>);
+            lastIndex = regex.lastIndex;
+          }
+          if (lastIndex < line.length) parts.push(<span key={key++}>{line.slice(lastIndex)}</span>);
+          if (parts.length === 0) parts.push(<span key={key++}>{line}</span>);
+          if (line.trim() === '') return <div key={i} className="h-2" />;
+          return <div key={i}>{parts}</div>;
+        })}
+      </div>
+    );
   };
 
   return (
@@ -950,17 +982,36 @@ export default function App() {
     loadData();
   }, [user]);
 
-  const handleIndicatorsUpdate = (updates) => {
+ const showToast = (title, message) => {
+    const id = Date.now();
+    setToasts(t => [...t, { id, title, message }]);
+    setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 5000);
+  };
+
+  const handleIndicatorsUpdate = async (updates) => {
     setRecentUpdates(updates);
     setTimeout(() => setRecentUpdates([]), 8000);
-    setIndicators(prev => {
-      const copy = [...prev];
-      updates.forEach(u => {
-        const idx = copy.findIndex(x => x.code === u.code);
-        if (idx >= 0) copy[idx] = { ...copy[idx], value: u.value };
-      });
-      return copy;
-    });
+    updates.forEach(u => showToast(`${u.code || u.name} обновлён`, `Значение: ${u.value}`));
+
+    if (user?.role === 'patient') {
+      try {
+        const data = await API.getMyIndicators();
+        setIndicators(data.map(d => ({
+          code: d.indicator_type.code,
+          name: d.indicator_type.name,
+          unit: d.indicator_type.unit,
+          value: parseFloat(d.value),
+          min: d.indicator_type.normal_min,
+          max: d.indicator_type.normal_max,
+          status: (d.indicator_type.normal_min && d.indicator_type.normal_max && 
+                   d.value >= d.indicator_type.normal_min && d.value <= d.indicator_type.normal_max) 
+                  ? 'normal' : 'warning',
+          updatedAt: d.measured_at,
+        })));
+      } catch (err) {
+        console.error("Ошибка получения обновленных показателей:", err);
+      }
+    }
   };
 
   const handleAddPatient = async (form) => {
