@@ -1,5 +1,6 @@
 /.gigacode
 /.venv
-
 /frontend/node_modules
 /backend/app/__pycache__
+
+/backend/.env
